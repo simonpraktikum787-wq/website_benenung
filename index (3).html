@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Bildbenennungs-Generator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      background: #111;
+      color: #e8ddd0;
+      font-family: 'Segoe UI', sans-serif;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Grain-Overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 256px 256px;
+    }
+
+    /* Glow oben */
+    body::after {
+      content: '';
+      position: fixed; top: -120px; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 300px; border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(245,158,11,0.13) 0%, transparent 70%);
+      pointer-events: none; z-index: 0;
+    }
+
+    .container {
+      position: relative; z-index: 1;
+      max-width: 680px; margin: 0 auto;
+      padding: 40px 24px 60px;
+    }
+
+    /* ── Header ── */
+    .header { text-align: center; margin-bottom: 36px; }
+    .header-badge {
+      display: inline-block;
+      font-family: 'Courier New', monospace; font-size: 11px;
+      letter-spacing: 3px; color: #f59e0b; text-transform: uppercase;
+      padding: 4px 14px; border: 1px solid rgba(245,158,11,0.3); border-radius: 20px;
+      margin-bottom: 10px;
+    }
+    .header h1 { font-size: 28px; font-weight: 700; color: #f0e6d0; letter-spacing: -0.5px; }
+    .header h1 span { color: #f59e0b; }
+    .header p { font-size: 13px; color: #666; margin-top: 8px; max-width: 440px; margin-left: auto; margin-right: auto; }
+
+    /* ── Schema-Box ── */
+    .schema-box {
+      background: rgba(245,158,11,0.06);
+      border: 1px solid rgba(245,158,11,0.18);
+      border-radius: 10px; padding: 14px 18px; margin-bottom: 30px;
+    }
+    .schema-box .label {
+      font-size: 11px; color: #f59e0b; font-weight: 700;
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px;
+    }
+    .schema-box code {
+      font-size: 14px; color: #f0e6d0; font-family: 'Courier New', monospace;
+      background: rgba(0,0,0,0.3); padding: 5px 12px; border-radius: 6px;
+      display: inline-block;
+    }
+    .schema-box .example { font-size: 12px; color: #777; margin-top: 6px; }
+    .schema-box .example code { color: #f59e0b; background: none; padding: 0; font-size: 12px; }
+
+    /* ── Stepper ── */
+    .stepper {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 20px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06); border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    .step-item { display: flex; align-items: center; gap: 10px; }
+    .step-circle {
+      width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Courier New', monospace; font-weight: 700; font-size: 15px;
+      background: #2a2a2a; color: #666;
+      border: 2px solid transparent;
+      transition: all 0.3s;
+    }
+    .step-circle.active { background: #f59e0b; color: #1a1a1a; box-shadow: 0 0 12px rgba(245,158,11,0.35); }
+    .step-circle.done   { background: #22c55e; color: #fff; }
+    .step-label {
+      font-size: 13px; letter-spacing: 1px; text-transform: uppercase;
+      color: #555; font-weight: 400; transition: color 0.3s;
+    }
+    .step-label.active { color: #f0e6d0; font-weight: 600; }
+    .step-label.done   { color: #22c55e; font-weight: 600; }
+    .step-line {
+      flex: 1; height: 2px; background: #2a2a2a; border-radius: 1px; transition: background 0.4s;
+    }
+    .step-line.done { background: #22c55e; }
+
+    /* ── Schritt-Blöcke ── */
+    .step-block { margin-bottom: 26px; }
+    .step-block-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+    }
+    .step-block-title { font-size: 15px; font-weight: 600; color: #555; }
+    .step-block-title.active { color: #f0e6d0; }
+    .step-block-title .num { color: #f59e0b; font-family: 'Courier New', monospace; margin-right: 8px; }
+    .btn-change {
+      background: none; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+      color: #999; font-size: 11px; padding: 3px 10px; cursor: pointer;
+    }
+    .btn-change:hover { border-color: rgba(255,255,255,0.25); color: #ccc; }
+
+    /* ── Karten-Grid ── */
+    .card-grid { display: grid; gap: 10px; }
+    .card-grid.cat { grid-template-columns: repeat(2,1fr); }
+    .card-grid.ho  { grid-template-columns: repeat(2,1fr); gap: 8px; }
+
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 18px 20px;
+      cursor: pointer; text-align: left;
+      transition: all 0.25s; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .card:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.2); }
+    .card.selected {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border: none; box-shadow: 0 4px 24px rgba(245,158,11,0.3);
+      transform: translateY(-2px);
+    }
+    .card .card-title { font-size: 14px; font-weight: 700; color: #f0e6d0; letter-spacing: 0.5px; }
+    .card.selected .card-title { color: #1a1a1a; }
+    .card .card-sub { font-size: 11px; color: #666; margin-top: 4px; font-family: 'Courier New', monospace; }
+    .card.selected .card-sub { color: #3b2800; }
+
+    .card.ho-card { border-radius: 10px; padding: 12px 16px; }
+    .card.ho-card .card-title { font-size: 13px; }
+
+    /* ── Bestätigung (Chips) ── */
+    .confirmed-chip {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: rgba(34,197,94,0.07); border: 1px solid rgba(34,197,94,0.2);
+      border-radius: 8px; padding: 10px 16px;
+    }
+    .confirmed-chip .check { color: #22c55e; font-size: 14px; }
+    .confirmed-chip .chip-title { font-size: 13px; color: #a8c5a0; font-weight: 600; }
+    .confirmed-chip .chip-id { font-size: 11px; color: #666; font-family: 'Courier New', monospace; }
+
+    /* ── Anzahl-Stepper ── */
+    .count-row { display: flex; align-items: center; gap: 14px; }
+    .count-btn {
+      width: 42px; height: 42px; border-radius: 10px;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+      color: #f0e6d0; font-size: 22px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .count-btn:hover { background: rgba(255,255,255,0.12); }
+    .count-display {
+      width: 72px; height: 42px; border-radius: 10px;
+      background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700; color: #f59e0b;
+      font-family: 'Courier New', monospace;
+    }
+    .count-row input[type=range] { flex: 1; accent-color: #f59e0b; cursor: pointer; }
+    .count-max { font-size: 11px; color: #666; min-width: 30px; }
+
+    /* ── Ergebnis-Box ── */
+    .result-box {
+      background: linear-gradient(145deg, #1e1e14, #14140f);
+      border: 1px solid rgba(245,158,11,0.25); border-radius: 14px;
+      overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      margin-top: 4px;
+    }
+    .result-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px;
+      background: rgba(245,158,11,0.08);
+      border-bottom: 1px solid rgba(245,158,11,0.15);
+    }
+    .result-header .title { font-size: 13px; color: #f59e0b; font-weight: 700; letter-spacing: 0.5px; }
+    .result-btns { display: flex; gap: 8px; }
+    .btn-copy, .btn-dl {
+      border: none; border-radius: 6px; font-size: 12px;
+      padding: 6px 14px; cursor: pointer; font-weight: 600; transition: all 0.2s;
+    }
+    .btn-copy { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .btn-copy:hover { background: rgba(245,158,11,0.25); }
+    .btn-copy.copied { background: #22c55e; color: #fff; }
+    .btn-dl { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #ccc; }
+    .btn-dl:hover { background: rgba(255,255,255,0.1); }
+
+    .result-list { padding: 16px; max-height: 320px; overflow-y: auto; }
+    .result-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 7px; cursor: pointer;
+      border: 1px solid transparent; transition: background 0.2s;
+    }
+    .result-item:nth-child(odd) { background: rgba(255,255,255,0.025); }
+    .result-item:hover { background: rgba(255,255,255,0.06); }
+    .result-item.item-copied { background: rgba(34,197,94,0.1); border-color: rgba(34,197,94,0.3); }
+    .result-item .item-left { display: flex; align-items: center; gap: 10px; }
+    .result-item .item-num { font-family: 'Courier New', monospace; font-size: 11px; color: #666; min-width: 22px; text-align: right; }
+    .result-item .item-name { font-family: 'Courier New', monospace; font-size: 13.5px; color: #d4c5a9; letter-spacing: 0.3px; }
+    .result-item.item-copied .item-name { color: #22c55e; }
+    .result-item .item-hint { font-size: 10px; color: #444; }
+    .result-item.item-copied .item-hint { color: #22c55e; }
+
+    /* ── Reset ── */
+    .btn-reset {
+      display: block; margin: 26px auto 0;
+      background: none; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+      color: #666; font-size: 13px; padding: 8px 22px; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-reset:hover { border-color: rgba(255,255,255,0.25); color: #aaa; }
+
+    /* ── Hidden Helper ── */
+    .hidden { display: none !important; }
+
+    @media (max-width: 520px) {
+      .card-grid.cat, .card-grid.ho { grid-template-columns: 1fr; }
+      .stepper { gap: 6px; padding: 12px 14px; }
+      .step-label { font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">Handout-Verwaltung</div>
+    <h1>Bildbenennungs-<span>Generator</span></h1>
+    <p>Erstelle korrekt benannte Dateinamen für deine Handout-Bilder</p>
+  </div>
+
+  <!-- Schema -->
+  <div class="schema-box">
+    <div class="label">Benennungsschema</div>
+    <code>kategorie-id_handout-id_seitennummer.jpg</code>
+    <div class="example">Beispiel: <code>digitaler-alltag_doctolib_1.jpg</code></div>
+  </div>
+
+  <!-- Stepper -->
+  <div class="stepper">
+    <div class="step-item">
+      <div class="step-circle active" id="circle-1">1</div>
+      <span class="step-label active" id="label-1">Kategorie</span>
+    </div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step-item">
+      <div class="step-circle" id="circle-2">2</div>
+      <span class="step-label" id="label-2">Handout</span>
+    </div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step-item">
+      <div class="step-circle" id="circle-3">3</div>
+      <span class="step-label" id="label-3">Anzahl</span>
+    </div>
+  </div>
+
+  <!-- STEP 1: Kategorie -->
+  <div class="step-block" id="block-1">
+    <div class="step-block-header">
+      <div class="step-block-title active" id="title-1"><span class="num">01</span>Wähle eine Kategorie</div>
+    </div>
+    <div id="cat-cards" class="card-grid cat"></div>
+    <div id="cat-confirmed" class="confirmed-chip hidden"></div>
+  </div>
+
+  <!-- STEP 2: Handout -->
+  <div class="step-block hidden" id="block-2">
+    <div class="step-block-header">
+      <div class="step-block-title" id="title-2"><span class="num">02</span>Wähle ein Handout</div>
+      <button class="btn-change" id="btn-change-ho" onclick="changeStep(2)">ändern</button>
+    </div>
+    <div id="ho-cards" class="card-grid ho"></div>
+    <div id="ho-confirmed" class="confirmed-chip hidden"></div>
+  </div>
+
+  <!-- STEP 3: Anzahl -->
+  <div class="step-block hidden" id="block-3">
+    <div class="step-block-header">
+      <div class="step-block-title" id="title-3"><span class="num">03</span>Wie viele Bilder gehören zum Handout?</div>
+    </div>
+    <div class="count-row">
+      <button class="count-btn" onclick="changeCount(-1)">−</button>
+      <div class="count-display" id="count-display">1</div>
+      <button class="count-btn" onclick="changeCount(1)">+</button>
+      <input type="range" min="1" max="50" value="1" id="count-slider" oninput="setCount(this.value)"/>
+      <span class="count-max">/50</span>
+    </div>
+  </div>
+
+  <!-- Ergebnis -->
+  <div class="result-box hidden" id="result-box">
+    <div class="result-header">
+      <span class="title" id="result-title">📂 Generierte Dateinamen</span>
+      <div class="result-btns">
+        <button class="btn-copy" id="btn-copy-all" onclick="copyAll()">📋 Alles kopieren</button>
+        <button class="btn-dl" onclick="downloadTxt()">⬇ Download .txt</button>
+      </div>
+    </div>
+    <div class="result-list" id="result-list"></div>
+  </div>
+
+  <!-- Reset -->
+  <button class="btn-reset hidden" id="btn-reset" onclick="resetAll()">↺ Zurücksetzen</button>
+
+</div>
+
+<script>
+// ── Daten ──────────────────────────────────────────────
+const categoriesConfig = {
+  'unterhaltung': { title: 'UNTERHALTUNG', handouts: [
+    { id: 'ard-audiothek', title:'ARD Audiothek' },
+    { id: 'spotify', title:'Spotify' }
+  ]},
+  'digitaler-alltag': { title: 'DIGITALER ALLTAG', handouts: [
+    {id:'notfallpass-android', title:'Notfallpass Android'},
+    {id:'notfallpass-iphone', title:'Notfallpass iPhone'},
+    {id:'online-banking', title:'Online Banking'},
+    {id:'db-app', title:'DB App'},
+    {id:'lieferdienste', title:'Lieferdienste'},
+    {id:'online-shops', title:'Online Shops'},
+    {id:'flaschenpost', title:'Flaschenpost'},
+    {id:'doctolib', title:'Doctolib'},
+    {id:'payback-app', title:'Payback App'},
+    {id:'mytherapy', title:'MyTherapy'},
+    {id:'e-rezept-gesundde', title:'E-Rezept - Gesund.de'}
+  ]},
+  'sicherheit': { title: 'SICHERHEIT', handouts: [
+    {id:'adblocker-antivirus', title:'Adblocker und Antivirus'},
+    {id:'chrome-werbung-blockieren', title:'Chrome Werbung blockieren'},
+    {id:'samsung-browser-werbung-blockieren', title:'Samsung Browser Werbung blockieren'},
+    {id:'xiaomi-werbung', title:'Xiaomi Werbung'},
+    {id:'safari-einstellungen', title:'Safari Einstellungen'},
+    {id:'online-betrug', title:'Online-Betrug'},
+    {id:'passwortmanager', title:'Passwortmanager Handout'}
+  ]},
+  'handy-grundlagen': { title:'HANDY GRUNDLAGEN', handouts: [
+    {id:'e-mails', title:'E-Mails lesen und schreiben'},
+    {id:'fotos-whatsapp', title:'Fotos versenden WhatsApp'},
+    {id:'kalendereintrag', title:'Kalendereintrag'},
+    {id:'loeschungen-android', title:'Löschungen auf dem Android'},
+    {id:'updates-handy', title:'Updates auf dem Handy installieren'},
+    {id:'app-installieren-android', title:'App Installieren Android'},
+    {id:'qr-code-android', title:'QR-Code Android'},
+    {id:'qr-code-ios', title:'QR-Code iOS'},
+    {id:'loeschungen-iphone', title:'Löschungen auf einem iPhone durchführen'},
+    {id:'datenuebertragung-android', title:'Datenübertragung Android'},
+    {id:'datenuebertragung-android-kurz', title:'Datenübertragung Android Einfach'},
+    {id:'datenuebertragung-iphone', title:'Datenübertragung iPhone'},
+    {id:'datenuebertragung-vergleich', title:'Datenübertragung Android vs iPhone'}
+  ]}
+};
+
+// ── State ───────────────────────────────────────────────
+let currentStep      = 1;
+let selectedCategory = null;
+let selectedHandout  = null;
+let imageCount       = 1;
+
+// ── Init: Kategorie-Karten rendern ──────────────────────
+(function initCatCards() {
+  const grid = document.getElementById('cat-cards');
+  Object.entries(categoriesConfig).forEach(([id, cfg]) => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = id;
+    card.innerHTML = `
+      <div class="card-title">${cfg.title}</div>
+      <div class="card-sub">${cfg.handouts.length} Handouts</div>`;
+    card.addEventListener('click', () => selectCategory(id));
+    grid.appendChild(card);
+  });
+})();
+
+// ── Kategorie wählen ────────────────────────────────────
+function selectCategory(id) {
+  selectedCategory = id;
+  selectedHandout  = null;
+  imageCount       = 1;
+
+  // Karte highlighten
+  document.querySelectorAll('#cat-cards .card').forEach(c => c.classList.toggle('selected', c.dataset.id === id));
+
+  // Bestätigungschip
+  const cfg = categoriesConfig[id];
+  document.getElementById('cat-confirmed').innerHTML =
+    `<span class="check">✓</span><span class="chip-title">${cfg.title}</span><span class="chip-id">${id}</span>`;
+
+  // Handout-Karten befüllen
+  const hoGrid = document.getElementById('ho-cards');
+  hoGrid.innerHTML = '';
+  cfg.handouts.forEach(h => {
+    const card = document.createElement('div');
+    card.className = 'card ho-card';
+    card.dataset.id = h.id;
+    card.innerHTML = `<div class="card-title">${h.title}</div><div class="card-sub">${h.id}</div>`;
+    card.addEventListener('click', () => selectHandout(h.id));
+    hoGrid.appendChild(card);
+  });
+
+  goToStep(2);
+}
+
+// ── Handout wählen ─────────────────────────────────────
+function selectHandout(id) {
+  selectedHandout = id;
+  document.querySelectorAll('#ho-cards .card').forEach(c => c.classList.toggle('selected', c.dataset.id === id));
+
+  const ho = categoriesConfig[selectedCategory].handouts.find(h => h.id === id);
+  document.getElementById('ho-confirmed').innerHTML =
+    `<span class="check">✓</span><span class="chip-title">${ho.title}</span><span class="chip-id">${ho.id}</span>`;
+
+  goToStep(3);
+}
+
+// ── Anzahl ändern ──────────────────────────────────────
+function changeCount(delta) {
+  imageCount = Math.min(50, Math.max(1, imageCount + delta));
+  syncCount();
+  renderResult();
+}
+function setCount(val) {
+  imageCount = Number(val);
+  syncCount();
+  renderResult();
+}
+function syncCount() {
+  document.getElementById('count-display').textContent = imageCount;
+  document.getElementById('count-slider').value = imageCount;
+}
+
+// ── Ergebnis rendern ────────────────────────────────────
+function renderResult() {
+  if (!selectedCategory || !selectedHandout) return;
+
+  const names = getFilenames();
+  document.getElementById('result-title').textContent = `📂 Generierte Dateinamen (${names.length})`;
+
+  const list = document.getElementById('result-list');
+  list.innerHTML = '';
+  names.forEach((name, i) => {
+    const item = document.createElement('div');
+    item.className = 'result-item';
+    item.id = 'item-' + i;
+    item.innerHTML = `
+      <div class="item-left">
+        <span class="item-num">${i+1}.</span>
+        <code class="item-name">${name}</code>
+      </div>
+      <span class="item-hint">klicken</span>`;
+    item.addEventListener('click', () => copySingle(name, i));
+    list.appendChild(item);
+  });
+
+  show('result-box');
+  show('btn-reset');
+}
+
+// ── Schritt-Navigation ─────────────────────────────────
+function goToStep(n) {
+  currentStep = n;
+
+  // Blöcke ein/ausblenden & Titel-Farbe
+  [1,2,3].forEach(s => {
+    const block = document.getElementById('block-'+s);
+    const title = document.getElementById('title-'+s);
+    if (s < n) {
+      show(block);
+      title.classList.remove('active');
+      // Bestätigung zeigen, Karten verstecken
+      const cards = block.querySelector('.card-grid');
+      const conf  = block.querySelector('.confirmed-chip');
+      if (cards) cards.classList.add('hidden');
+      if (conf)  conf.classList.remove('hidden');
+    } else if (s === n) {
+      show(block);
+      title.classList.add('active');
+      const cards = block.querySelector('.card-grid');
+      const conf  = block.querySelector('.confirmed-chip');
+      if (cards) cards.classList.remove('hidden');
+      if (conf)  conf.classList.add('hidden');
+    } else {
+      hide(block);
+      title.classList.remove('active');
+    }
+  });
+
+  // "ändern"-Buttons
+  document.getElementById('btn-change-ho').classList.toggle('hidden', n !== 3);
+
+  // Stepper-Kreise & Linien
+  updateStepper();
+
+  // Ergebnis
+  if (n === 3) {
+    syncCount();
+    renderResult();
+  } else {
+    hide('result-box');
+    hide('btn-reset');
+  }
+}
+
+function changeStep(toStep) {
+  if (toStep === 2) {
+    selectedHandout = null;
+    goToStep(2);
+  }
+}
+
+function updateStepper() {
+  [1,2,3].forEach(s => {
+    const circle = document.getElementById('circle-'+s);
+    const label  = document.getElementById('label-'+s);
+    circle.classList.remove('active','done');
+    label.classList.remove('active','done');
+    if (s < currentStep)      { circle.classList.add('done'); circle.textContent = '✓'; label.classList.add('done'); }
+    else if (s === currentStep) { circle.classList.add('active'); circle.textContent = s; label.classList.add('active'); }
+    else                       { circle.textContent = s; }
+  });
+  // Linien
+  document.getElementById('line-1').classList.toggle('done', currentStep > 1);
+  document.getElementById('line-2').classList.toggle('done', currentStep > 2);
+}
+
+// ── Helpers ─────────────────────────────────────────────
+function getFilenames() {
+  return Array.from({length: imageCount}, (_,i) => `${selectedCategory}_${selectedHandout}_${i+1}.jpg`);
+}
+
+function copySingle(name, idx) {
+  navigator.clipboard.writeText(name).then(() => {
+    const item = document.getElementById('item-'+idx);
+    item.classList.add('item-copied');
+    item.querySelector('.item-hint').textContent = '✓ kopiert';
+    setTimeout(() => {
+      item.classList.remove('item-copied');
+      item.querySelector('.item-hint').textContent = 'klicken';
+    }, 1200);
+  });
+}
+
+function copyAll() {
+  navigator.clipboard.writeText(getFilenames().join('\n')).then(() => {
+    const btn = document.getElementById('btn-copy-all');
+    btn.classList.add('copied');
+    btn.textContent = '✓ Kopiert!';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = '📋 Alles kopieren'; }, 2000);
+  });
+}
+
+function downloadTxt() {
+  const blob = new Blob([getFilenames().join('\n')], {type:'text/plain'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${selectedCategory}_${selectedHandout}_dateinamen.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetAll() {
+  selectedCategory = null;
+  selectedHandout  = null;
+  imageCount       = 1;
+  // Kategorie-Karten zurück
+  document.querySelectorAll('#cat-cards .card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('cat-confirmed').classList.add('hidden');
+  document.getElementById('cat-cards').classList.remove('hidden');
+  // Blöcke 2 & 3 verstecken
+  hide('block-2');
+  hide('block-3');
+  hide('result-box');
+  hide('btn-reset');
+  // Stepper
+  currentStep = 1;
+  updateStepper();
+  document.getElementById('title-1').classList.add('active');
+}
+
+// ── Zeige / Verstecke (akzeptiert Element oder ID) ─────
+function show(el) { (typeof el === 'string' ? document.getElementById(el) : el).classList.remove('hidden'); }
+function hide(el) { (typeof el === 'string' ? document.getElementById(el) : el).classList.add('hidden'); }
+</script>
+
+</body>
+</html>
