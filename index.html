@@ -367,6 +367,57 @@
     /* ── Hidden Helper ── */
     .hidden { display: none !important; }
 
+    /* ── Bild-Modal für Vergrößerung ── */
+    .image-modal {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.9);
+      cursor: zoom-out;
+    }
+    .image-modal.show {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.2s;
+    }
+    .image-modal img {
+      max-width: 95%;
+      max-height: 95%;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 8px 64px rgba(0,0,0,0.8);
+    }
+    .image-modal-close {
+      position: absolute;
+      top: 20px;
+      right: 30px;
+      font-size: 40px;
+      font-weight: bold;
+      color: #f0e6d0;
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .image-modal-close:hover {
+      color: #f59e0b;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .clickable-image {
+      cursor: zoom-in;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .clickable-image:hover {
+      transform: scale(1.02);
+      box-shadow: 0 12px 48px rgba(0,0,0,0.6);
+    }
+
     @media (max-width: 520px) {
       .card-grid.cat, .card-grid.ho { grid-template-columns: 1fr; }
       .stepper { gap: 6px; padding: 12px 14px; }
@@ -468,7 +519,7 @@
   <!-- ════════════════════════════════════════════════════ -->
   <div class="section-divider" style="margin-top: 80px;">
     <div class="line"></div>
-    <div class="badge" style="color:#10b981; border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.06);">TOOL II</div>
+    <div class="badge" style="color:#10b981; border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.06);">TOOL 2 • 📄 PDF Generator</div>
     <div class="line"></div>
   </div>
 
@@ -554,7 +605,17 @@
 
   <!-- Bild -->
   <div style="text-align: center; margin-bottom: 36px;">
-    <img src="anleitung.png" alt="Anleitung Handout hinzufügen" style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);" />
+    <img src="anleitung.png" alt="Anleitung Handout hinzufügen" 
+         class="clickable-image"
+         onclick="openImageModal(this.src)" 
+         style="max-width: 100%; height: auto; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);" />
+    <div style="font-size: 11px; color: #666; margin-top: 8px;">🔍 Klicken zum Vergrößern</div>
+  </div>
+
+  <!-- Bild-Modal -->
+  <div id="imageModal" class="image-modal" onclick="closeImageModal()">
+    <span class="image-modal-close">&times;</span>
+    <img id="modalImage" src="" alt="Vergrößerte Ansicht">
   </div>
 
   <div class="new-ho-panel">
@@ -1281,6 +1342,30 @@ function copyCode() {
 function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
+
+// ══════════════════════════════════════════════════════════
+//  BILD-MODAL FÜR VERGRÖSSERUNG
+// ══════════════════════════════════════════════════════════
+function openImageModal(src) {
+  const modal = document.getElementById('imageModal');
+  const modalImg = document.getElementById('modalImage');
+  modal.classList.add('show');
+  modalImg.src = src;
+  document.body.style.overflow = 'hidden'; // Verhindere Scrollen im Hintergrund
+}
+
+function closeImageModal() {
+  const modal = document.getElementById('imageModal');
+  modal.classList.remove('show');
+  document.body.style.overflow = ''; // Erlaube wieder Scrollen
+}
+
+// ESC-Taste zum Schließen
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    closeImageModal();
+  }
+});
 </script>
 
 </body>
